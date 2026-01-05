@@ -4,7 +4,7 @@ from umqtt.simple import MQTTClient
 from machine import I2C, ADC, Pin
 import BME280
 from json import dumps
-import NAU7802
+# import NAU7802
 
 # Setup I2C and other globals
 i2c = I2C(freq=400000, scl=25, sda=26)
@@ -29,11 +29,11 @@ def sense_bme(bme):
     alt = alt*3.28084
     return({"Temperature": f"{temp:.2f}", "Pressure": pres, "Humidity": hum, "Dew point": f"{dew:.2f}", "Approximate altitude": f"{alt:.2f}"})
 
-def setup_scale():
+# def setup_scale():
 
-    nau7802 = NAU7802.NAU7802(i2c=i2c)
-    nau7802.offset = nau7802.get_reading_adv(times=300)
-    return nau7802
+#     nau7802 = NAU7802.NAU7802(i2c=i2c)
+#     nau7802.offset = nau7802.get_reading_adv(times=300)
+#     return nau7802
 
 def  setup_anemometer():
     
@@ -48,33 +48,38 @@ def setup_uv_sensor():
     uv = ADC(33, atten=ADC.ATTN_0DB)
     
     return uv
+
+
 wlan = network.WLAN()
 wlan.active(True)
 wlan.connect("Levi's Asus Wifi 2.4Ghz", "WifiPassword")
 while not wlan.isconnected():
     sleep(1)
 
-mqtt = MQTTClient('weather-station', '10.0.0.53', 1883)
 
-while True:
-   # try:
+mqtt = MQTTClient('weather-station', '10.0.0.53', 1883)
+bme = setup_bme()
+# nau7802 = setup_scale()
+anem = setup_anemometer()
+uv = setup_uv_sensor()
+
+# These are needed for wind speed calculations
+voltMin = 0.4
+voltMax = 2.0
+voltRange = voltMax-voltMin
+speedMin = 0
+speedMax = 60
+speedRange = speedMax - speedMin
+
+try:
     mqtt.connect()
         
     while True:
-        bme = setup_bme()
         sense = sense_bme(bme)
         
-        nau7802 = setup_scale()
-        scale = {'weight': "{:.2f}".format((nau7802.get_reading_adv(times=100) - nau7802.offset)*nau7802.a_sparkfun_500g/10)} # Have to divide by 10 to get close to ounces
+        # scale = {'weight': "{:.2f}".format((nau7802.get_reading_adv(times=100) - nau7802.offset)*nau7802.a_sparkfun_500g/10)} # Have to divide by 10 to get close to ounces
         
-        anem = setup_anemometer()
         volts = anem.read_uv()/1000000   # read an analog value in microvolts
-        voltMin = 0.4
-        voltMax = 2.0
-        voltRange = voltMax-voltMin
-        speedMin = 0
-        speedMax = 60
-        speedRange = speedMax - speedMin
         
         windSpeed = ((volts-voltMin)/voltRange)*speedRange # in m/s
         
@@ -84,7 +89,6 @@ while True:
         else:
             anemResults = {'windspeed':f"{windSpeed:.2f} m/s"}
             
-        uv = setup_uv_sensor()
         volts = uv.read_uv()/1000000
         
         uvIndex = volts/0.1
@@ -96,9 +100,17 @@ while True:
         sleep(1)
 
             
-#    except Exception as e:
- #       print(e)
-  #      sleep(10)
-  
+except Exception as e:
+    print(e)
+    sleep(10)
+
+    # Retry at least twice, then open webrepl
+
+    # import webrepl
+    # webrepl.start()
+
+
+
+
     
     
